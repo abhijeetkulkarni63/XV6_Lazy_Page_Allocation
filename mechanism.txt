@@ -1,0 +1,24 @@
+Name: 		Abhijeet Kulkarni
+--------------------------------Lazy Allocation Mechanism------------------------------------
+In lazy allocation policy we do allocate physical memory in advance. We allow page fault to occur and then
+allocate required pages.
+
+Example:
+When we increase the size of our data segment by sbrk(10), we dont allocate new page right away. We create 
+an illusion to the user program that we have increased the size of the data segment. When user program
+tries to write to this newly increased memory, page fault occurs as physical memory has not been allocated
+yet. We capture this page fault in trap() function by comparing trap number with T_PGFLT (14). Then we take
+following actions to allocate required pages.
+
+a = PGROUNDDOWN(rcr2());
+rcr2() 			reads the CR2 register which contains the address at which page fault occured.
+PGGROUNDDOWN 	rounds down the address to the end of page address containing address pointed by CR2
+
+mem = kalloc();
+kalloc is a physical memory allocator. It allocates memory to user programs in pages (4096 bytes) and returns pointer to newly allocated memory.
+
+memset(mem, 0, PGSIZE);
+memset function copies 0 to address pointed by mem to mem + PGSIZE.
+
+mappages(proc->pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
+This method creates PTEs for virtual addresses starting at 'a' that refer to physical addresses starting at v2p(mem). v2p() method translates virtual address to physical address.

@@ -1,0 +1,447 @@
+diff -uNr DIR_XV6_BASE/.cvsignore DIR_XV6_WORKING/.cvsignore
+--- DIR_XV6_BASE/.cvsignore	2017-03-06 21:14:53.000000000 -0500
++++ DIR_XV6_WORKING/.cvsignore	1969-12-31 19:00:00.000000000 -0500
+@@ -1,16 +0,0 @@
+-*.asm
+-*.d
+-*.sym
+-_*
+-kernel
+-user1
+-userfs
+-usertests
+-xv6.img
+-vectors.S
+-bochsout.txt
+-bootblock
+-bootother
+-bootother.out
+-parport.out
+-fmt
+diff -uNr DIR_XV6_BASE/.dir-locals.el DIR_XV6_WORKING/.dir-locals.el
+--- DIR_XV6_BASE/.dir-locals.el	2017-03-06 21:14:53.000000000 -0500
++++ DIR_XV6_WORKING/.dir-locals.el	1969-12-31 19:00:00.000000000 -0500
+@@ -1,4 +0,0 @@
+-((c-mode
+-  (indent-tabs-mode . nil)
+-  (c-file-style . "bsd")
+-  (c-basic-offset . 2)))
+diff -uNr DIR_XV6_BASE/.gdbinit.tmpl DIR_XV6_WORKING/.gdbinit.tmpl
+--- DIR_XV6_BASE/.gdbinit.tmpl	2017-03-06 21:14:53.000000000 -0500
++++ DIR_XV6_WORKING/.gdbinit.tmpl	1969-12-31 19:00:00.000000000 -0500
+@@ -1,27 +0,0 @@
+-set $lastcs = -1
+-
+-define hook-stop
+-  # There doesn't seem to be a good way to detect if we're in 16- or
+-  # 32-bit mode, but in 32-bit mode we always run with CS == 8 in the
+-  # kernel and CS == 35 in user space
+-  if $cs == 8 || $cs == 35
+-    if $lastcs != 8 && $lastcs != 35
+-      set architecture i386
+-    end
+-    x/i $pc
+-  else
+-    if $lastcs == -1 || $lastcs == 8 || $lastcs == 35
+-      set architecture i8086
+-    end
+-    # Translate the segment:offset into a physical address
+-    printf "[%4x:%4x] ", $cs, $eip
+-    x/i $cs*16+$eip
+-  end
+-  set $lastcs = $cs
+-end
+-
+-echo + target remote localhost:1234\n
+-target remote localhost:1234
+-
+-echo + symbol-file kernel\n
+-symbol-file kernel
+diff -uNr DIR_XV6_BASE/lazyallocation.c DIR_XV6_WORKING/lazyallocation.c
+--- DIR_XV6_BASE/lazyallocation.c	1969-12-31 19:00:00.000000000 -0500
++++ DIR_XV6_WORKING/lazyallocation.c	2017-03-25 18:54:59.976652280 -0400
+@@ -0,0 +1,144 @@
++#include "types.h"
++#include "stat.h"
++#include "user.h"
++
++#define TOTAL_TEST_TRIALS 2
++
++int 
++main(int argc, char * argv[])
++{
++    int lazyindicator = 0;
++    char *a;// *b;
++    if (argc < 2)
++    {
++        printf(1, "Usage: lazyallocation 0|1.\n"
++                  "\t0: DEFAULT Allocation.\n"
++                  "\t1: Lazy Page Allocation.\n");
++        exit();
++    }
++
++    if (argv[1][0] == '0')
++    {
++        lazyindicator = 0;
++        printf(1, "\nDefault Page Allocator ...\n");
++    }
++    else
++    {
++        lazyindicator = 1;
++        printf(1, "\nLazy Page Allocator ...\n");
++    }
++
++    set_page_allocator(lazyindicator); // set according to user input
++    printf(1,"=========== TEST 1: sbrk(10) ===========\n");
++    printf(1,"Before sbrk(10), break 0x%p ", sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"Calling sbrk(10) ...\n");
++    sbrk(10);
++    printf(1,"After sbrk(10), break 0x%p ", sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"\n");
++    printf(1,"=========== TEST 2: writing valid bytes ===========\n");
++    printf(1,"Before the write, break 0x%p ", sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"Writing byte 0x%p ...\n", sbrk(0));
++    a = sbrk(0);
++    *a = 1;
++    printf(1,"After the write, ");
++    print_free_frame_cnt();
++    a = a - 1;
++    printf(1,"\n");
++    printf(1,"Before the write, ");
++    print_free_frame_cnt();
++    printf(1,"Writing byte 0x%p ...\n", a);
++    *a = 2;
++	printf(1,"After the write, ");
++    print_free_frame_cnt();
++    printf(1,"\n");
++    printf(1,"=========== TEST 3: sbrk(+) --> sbrk(-) --> write ===========\n");
++    printf(1,"Before sbrk(+), break 0x%p ", sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"Calling sbrk(16) ...\n");
++    sbrk(16);
++    printf(1,"After sbrk(+), break 0x%p ", sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"\n");
++    printf(1,"Before sbrk(-), break 0x%p ", sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"Calling sbrk(-1) ...\n");
++    sbrk(-1);
++    printf(1,"After sbrk(-1), break 0x%p ", sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"\n");
++    a = sbrk(0);
++    printf(1,"Before the write, ");
++    print_free_frame_cnt();
++    printf(1,"Writing byte 0x%p ...\n", a);
++    *a = 2;
++	printf(1,"After the write, ");
++    print_free_frame_cnt();
++    printf(1,"\n");
++    printf(1,"===========TEST 4: sbrk(3 pages) --> write in 1st/2nd pages --> sbrk(-1 page) --> sbrk(-1 page) --> sbrk(-1 page)===========\n");
++    printf(1,"Before the sbrk(3 pages), break 0x%p ",sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"Calling sbrk(12288) ...\n");
++    sbrk(12288);
++    printf(1,"After the sbrk(3 pages), break 0x%p", sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"\n");
++    printf(1,"Before the write (in 1st page), ");
++    print_free_frame_cnt();
++    a = sbrk(0) - (4096*2) + 100;
++    printf(1,"Writing byte 0x%p ...\n",a);
++    *a = 1;
++    printf(1,"After the write, ");
++    print_free_frame_cnt();
++    printf(1,"\n");
++    printf(1,"Before the write (in 2nd page), ");
++    print_free_frame_cnt();
++    a = sbrk(0) - 4096 + 100;
++    printf(1,"Writing byte 0x%p ...\n",a);
++    *a = 1;
++    printf(1,"After the write, ");
++    print_free_frame_cnt();
++    printf(1,"\n");
++    printf(1,"Before the sbrk(-1 pages), break 0x%p ",sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"Calling sbrk(-4096) ...\n");
++    sbrk(-4096);
++    printf(1,"After the sbrk(-1 pages), break 0x%p", sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"\n");
++    printf(1,"Before the sbrk(-1 pages), break 0x%p ",sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"Calling sbrk(-4096) ...\n");
++    sbrk(-4096);
++    printf(1,"After the sbrk(-1 pages), break 0x%p", sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"\n");
++    printf(1,"Before the sbrk(-1 pages), break 0x%p ",sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"Calling sbrk(-4096) ...\n");
++    sbrk(-4096);
++    printf(1,"After the sbrk(-1 pages), break 0x%p ", sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"\n");
++    printf(1,"=========== TEST 5: allocating too much memory ===========\n");
++    printf(1,"Before the sbrk(0x7FFFFFFF), break 0x%p ",sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"Calling sbrk(0x7FFFFFFF) ...\n");
++    sbrk(0x7FFFFFFF);
++    printf(1,"After the sbrk(0x7FFFFFFF), break 0x%p ", sbrk(0));
++    print_free_frame_cnt();
++    printf(1,"\n");
++    printf(1,"=========== TEST 6: writing in a unallocated page above the progam break ===========\n");
++    printf(1,"Before the write, break 0x%p ", sbrk(0));
++    print_free_frame_cnt();
++    a = sbrk(0) + 4096;
++    printf(1,"Writing byte 0x%p ...\n",a);
++    *a = 1;
++    printf(1,"After the write, ");
++    print_free_frame_cnt();
++    printf(1,"\n");
++    exit();
++    return 0;
++}
+\ No newline at end of file
+diff -uNr DIR_XV6_BASE/Makefile DIR_XV6_WORKING/Makefile
+--- DIR_XV6_BASE/Makefile	2017-03-06 21:14:53.000000000 -0500
++++ DIR_XV6_WORKING/Makefile	2017-03-09 21:22:42.332818571 -0500
+@@ -173,6 +173,7 @@
+ 	_wc\
+ 	_zombie\
+ 	_shutdown \
++	_lazyallocation\
+ 
+ fs.img: mkfs README $(UPROGS)
+ 	./mkfs fs.img README $(UPROGS)
+@@ -244,6 +245,7 @@
+ 	mkfs.c ulib.c user.h cat.c echo.c forktest.c grep.c kill.c\
+ 	ln.c ls.c mkdir.c rm.c stressfs.c usertests.c wc.c zombie.c\
+ 	printf.c umalloc.c\
++	lazyallocation.c\
+ 	README dot-bochsrc *.pl toc.* runoff runoff1 runoff.list\
+ 	.gdbinit.tmpl gdbutil\
+ 
+diff -uNr DIR_XV6_BASE/proc.h DIR_XV6_WORKING/proc.h
+--- DIR_XV6_BASE/proc.h	2017-03-06 21:14:53.000000000 -0500
++++ DIR_XV6_WORKING/proc.h	2017-03-09 20:04:52.381537634 -0500
+@@ -66,6 +66,7 @@
+   struct file *ofile[NOFILE];  // Open files
+   struct inode *cwd;           // Current directory
+   char name[16];               // Process name (debugging)
++  uint oldsz;                  // Old size of process memory (bytes)
+ };
+ 
+ // Process memory is laid out contiguously, low addresses first:
+diff -uNr DIR_XV6_BASE/syscall.c DIR_XV6_WORKING/syscall.c
+--- DIR_XV6_BASE/syscall.c	2017-03-06 21:14:53.000000000 -0500
++++ DIR_XV6_WORKING/syscall.c	2017-03-09 21:21:40.176557045 -0500
+@@ -101,6 +101,8 @@
+ 
+ extern int sys_shutdown(void);
+ extern int sys_print_free_frame_cnt(void);
++extern int sys_set_page_allocator(void);
++
+ static int (*syscalls[])(void) = {
+ [SYS_fork]    sys_fork,
+ [SYS_exit]    sys_exit,
+@@ -125,6 +127,7 @@
+ [SYS_close]   sys_close,
+ [SYS_shutdown]      sys_shutdown,
+ [SYS_print_free_frame_cnt]  sys_print_free_frame_cnt,
++[SYS_set_page_allocator]   sys_set_page_allocator,
+ };
+ 
+ void
+diff -uNr DIR_XV6_BASE/syscall.h DIR_XV6_WORKING/syscall.h
+--- DIR_XV6_BASE/syscall.h	2017-03-06 21:14:53.000000000 -0500
++++ DIR_XV6_WORKING/syscall.h	2017-03-09 21:20:56.824361001 -0500
+@@ -21,4 +21,5 @@
+ #define SYS_mkdir  20
+ #define SYS_close  21
+ #define SYS_shutdown     22
+-#define SYS_print_free_frame_cnt 23
+\ No newline at end of file
++#define SYS_print_free_frame_cnt 23
++#define SYS_set_page_allocator  24
+\ No newline at end of file
+diff -uNr DIR_XV6_BASE/sysproc.c DIR_XV6_WORKING/sysproc.c
+--- DIR_XV6_BASE/sysproc.c	2017-03-06 21:14:53.000000000 -0500
++++ DIR_XV6_WORKING/sysproc.c	2017-03-25 18:03:22.845350750 -0400
+@@ -6,6 +6,7 @@
+ #include "memlayout.h"
+ #include "mmu.h"
+ #include "proc.h"
++#include "traps.h"
+ 
+ extern int free_frame_cnt; // CS550: for mem proj
+ int
+@@ -43,17 +44,34 @@
+   return proc->pid;
+ }
+ 
++int globallazyindicator;
++
+ int
+ sys_sbrk(void)
+ {
+   int addr;
+   int n;
+-
+-  if(argint(0, &n) < 0)
+-    return -1;
++  uint sz;
++  argint(0, &n);
+   addr = proc->sz;
+-  if(growproc(n) < 0)
+-    return -1;
++  if(globallazyindicator == 1) {
++  	if((proc->sz + n) >= 0xfffffff) {
++    	cprintf("Allocating pages failed!\n");
++        return -1;
++    }
++  	proc->oldsz = proc->sz;
++  	proc->sz = proc->sz + n;
++    if(n < 0) {
++    	if((sz = deallocuvm(proc->pgdir, proc->oldsz, proc->sz)) == 0)
++    	{
++      		cprintf("Deallocating pages failed!\n"); // CS550: for mem proj
++      		return -1;
++    	}
++    }
++  } else {
++  	if(growproc(n) < 0)
++    	return -1;
++  }
+   return addr;
+ }
+ 
+@@ -90,12 +108,20 @@
+   release(&tickslock);
+   return xticks;
+ }
++
+ int sys_shutdown(void)
+ {
+   outw(0xB004, 0x0|0x2000);
+-
+   return 0;
+ }
++
++int sys_set_page_allocator(void) {
++	int lazyindicator;
++	argint(0, &lazyindicator);
++	globallazyindicator = lazyindicator;
++	return 0;
++}
++
+ int sys_print_free_frame_cnt(void)
+ {
+     cprintf("free-frames %d\n", free_frame_cnt);
+diff -uNr DIR_XV6_BASE/trap.c DIR_XV6_WORKING/trap.c
+--- DIR_XV6_BASE/trap.c	2017-03-06 21:14:53.000000000 -0500
++++ DIR_XV6_WORKING/trap.c	2017-03-25 17:48:48.792742621 -0400
+@@ -14,6 +14,8 @@
+ struct spinlock tickslock;
+ uint ticks;
+ 
++extern int mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm);
++
+ void
+ tvinit(void)
+ {
+@@ -77,7 +79,6 @@
+             cpu->id, tf->cs, tf->eip);
+     lapiceoi();
+     break;
+-   
+   //PAGEBREAK: 13
+   default:
+     if(proc == 0 || (tf->cs&3) == 0){
+@@ -87,6 +88,29 @@
+       panic("trap");
+     }
+     // In user space, assume process misbehaved.
++    // Page Fault. Lazy Allocation.
++    if(rcr2() > proc->sz) {
++        cprintf("Unhandled Page Fault.\n");
++    }
++    else {
++      if(tf->trapno == T_PGFLT) {
++        char *mem;
++        uint a;
++        if(proc->sz < proc->oldsz) {
++          return;
++        }
++        a = PGROUNDDOWN(rcr2());
++        mem = kalloc();
++        if(mem == 0) {
++          cprintf("allocuvm out of memory\n");
++          proc->killed = 1;
++          return;
++        }
++        memset(mem, 0, PGSIZE);
++        mappages(proc->pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
++        break;
++      }
++    }
+     cprintf("pid %d %s: trap %d err %d on cpu %d "
+             "eip 0x%x addr 0x%x--kill proc\n",
+             proc->pid, proc->name, tf->trapno, tf->err, cpu->id, tf->eip, 
+diff -uNr DIR_XV6_BASE/traps.h DIR_XV6_WORKING/traps.h
+--- DIR_XV6_BASE/traps.h	2017-03-06 21:14:53.000000000 -0500
++++ DIR_XV6_WORKING/traps.h	2017-03-17 19:33:32.841354365 -0400
+@@ -35,4 +35,3 @@
+ #define IRQ_IDE         14
+ #define IRQ_ERROR       19
+ #define IRQ_SPURIOUS    31
+-
+diff -uNr DIR_XV6_BASE/user.h DIR_XV6_WORKING/user.h
+--- DIR_XV6_BASE/user.h	2017-03-06 21:14:53.000000000 -0500
++++ DIR_XV6_WORKING/user.h	2017-03-09 21:19:49.308030703 -0500
+@@ -23,6 +23,7 @@
+ char* sbrk(int);
+ int sleep(int);
+ int uptime(void);
++void set_page_allocator(int allocator);
+ 
+ // ulib.c
+ int stat(char*, struct stat*);
+diff -uNr DIR_XV6_BASE/usys.S DIR_XV6_WORKING/usys.S
+--- DIR_XV6_BASE/usys.S	2017-03-06 21:14:53.000000000 -0500
++++ DIR_XV6_WORKING/usys.S	2017-03-09 21:20:23.104200035 -0500
+@@ -30,4 +30,5 @@
+ SYSCALL(sleep)
+ SYSCALL(uptime)
+ SYSCALL(shutdown)
+-SYSCALL(print_free_frame_cnt)
+\ No newline at end of file
++SYSCALL(print_free_frame_cnt)
++SYSCALL(set_page_allocator)
+\ No newline at end of file
+diff -uNr DIR_XV6_BASE/vm.c DIR_XV6_WORKING/vm.c
+--- DIR_XV6_BASE/vm.c	2017-03-06 21:14:53.000000000 -0500
++++ DIR_XV6_WORKING/vm.c	2017-03-09 21:04:19.720792630 -0500
+@@ -67,7 +67,7 @@
+ // Create PTEs for virtual addresses starting at va that refer to
+ // physical addresses starting at pa. va and size might not
+ // be page-aligned.
+-static int
++int
+ mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
+ {
+   char *a, *last;
+@@ -78,8 +78,9 @@
+   for(;;){
+     if((pte = walkpgdir(pgdir, a, 1)) == 0)
+       return -1;
+-    if(*pte & PTE_P)
++    if(*pte & PTE_P) {
+       panic("remap");
++    }
+     *pte = pa | perm | PTE_P;
+     if(a == last)
+       break;

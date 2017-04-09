@@ -1,0 +1,145 @@
+NAME: ABHIJEET KULKARNI
+B NUMBER: B00659279
+---------------------------------------------------------------------------------------------------------------------
+
+STATUS: FULLY COMPLETED
+---------------------------------------------------------------------------------------------------------------------
+
+DESCRIPTION:
+Implemented lazy page allocation policy.
+---------------------------------------------------------------------------------------------------------------------
+
+TEST CASE:
+$lazyallocation 0
+
+Default Page Allocator ...
+=========== TEST 1: sbrk(10) ===========
+Before sbrk(10), break 0x4000 free-frames 56789
+Calling sbrk(10) ...
+After sbrk(10), break 0x400A free-frames 56788
+
+=========== TEST 2: writing valid bytes ===========
+Before the write, break 0x400A free-frames 56788
+Writing byte 0x400A ...
+After the write, free-frames 56788
+
+Before the write, free-frames 56788
+Writing byte 0x4009 ...
+After the write, free-frames 56788
+
+=========== TEST 3: sbrk(+) --> sbrk(-) --> write ===========
+Before sbrk(+), break 0x400A free-frames 56788
+Calling sbrk(16) ...
+After sbrk(+), break 0x401A free-frames 56788
+
+Before sbrk(-), break 0x401A free-frames 56788
+Calling sbrk(-1) ...
+After sbrk(-1), break 0x4019 free-frames 56788
+
+Before the write, free-frames 56788
+Writing byte 0x4019 ...
+After the write, free-frames 56788
+
+===========TEST 4: sbrk(3 pages) --> write in 1st/2nd pages --> sbrk(-1 page) --> sbrk(-1 page) --> sbrk(-1 page)===========
+Before the sbrk(3 pages), break 0x4019 free-frames 56788
+Calling sbrk(12288) ...
+After the sbrk(3 pages), break 0x7019free-frames 56785
+
+Before the write (in 1st page), free-frames 56785
+Writing byte 0x507D ...
+After the write, free-frames 56785
+
+Before the write (in 2nd page), free-frames 56785
+Writing byte 0x607D ...
+After the write, free-frames 56785
+
+Before the sbrk(-1 pages), break 0x7019 free-frames 56785
+Calling sbrk(-4096) ...
+After the sbrk(-1 pages), break 0x6019free-frames 56786
+
+Before the sbrk(-1 pages), break 0x6019 free-frames 56786
+Calling sbrk(-4096) ...
+After the sbrk(-1 pages), break 0x5019free-frames 56787
+
+Before the sbrk(-1 pages), break 0x5019 free-frames 56787
+Calling sbrk(-4096) ...
+After the sbrk(-1 pages), break 0x4019free-frames 56788
+
+=========== TEST 5: allocating too much memory ===========
+Before the sbrk(0x7FFFFFFF), break 0x4019 free-frames 56788
+Calling sbrk(0x7FFFFFFF) ...
+Allocating pages failed!
+After the sbrk(0x7FFFFFFF), break 0x4019free-frames 56788
+
+=========== TEST 6: writing in a unallocated page above the progam break ===========
+Before the write, break 0x4019free-frames 56788
+Writing byte 0x5019 ...
+Unhandled Page Fault.
+pid 4 lazyallocation: trap 14 err 6 on cpu 0 eip 0x75a addr 0x5019--kill proc
+
+$lazyallocation 1
+Lazy Page Allocator ...
+=========== TEST 1: sbrk(10) ===========
+Before sbrk(10), break 0x4000 free-frames 56789
+Calling sbrk(10) ...
+After sbrk(10), break 0x400A free-frames 56789
+
+=========== TEST 2: writing valid bytes ===========
+Before the write, break 0x400A free-frames 56789
+Writing byte 0x400A ...
+After the write, free-frames 56788
+
+Before the write, free-frames 56788
+Writing byte 0x4009 ...
+After the write, free-frames 56788
+
+=========== TEST 3: sbrk(+) --> sbrk(-) --> write ===========
+Before sbrk(+), break 0x400A free-frames 56788
+Calling sbrk(16) ...
+After sbrk(+), break 0x401A free-frames 56788
+
+Before sbrk(-), break 0x401A free-frames 56788
+Calling sbrk(-1) ...
+After sbrk(-1), break 0x4019 free-frames 56788
+
+Before the write, free-frames 56788
+Writing byte 0x4019 ...
+After the write, free-frames 56788
+
+===========TEST 4: sbrk(3 pages) --> write in 1st/2nd pages --> sbrk(-1 page) --> sbrk(-1 page) --> sbrk(-1 page)===========
+Before the sbrk(3 pages), break 0x4019 free-frames 56788
+Calling sbrk(12288) ...
+After the sbrk(3 pages), break 0x7019free-frames 56788
+
+Before the write (in 1st page), free-frames 56788
+Writing byte 0x507D ...
+After the write, free-frames 56787
+
+Before the write (in 2nd page), free-frames 56787
+Writing byte 0x607D ...
+After the write, free-frames 56786
+
+Before the sbrk(-1 pages), break 0x7019 free-frames 56786
+Calling sbrk(-4096) ...
+After the sbrk(-1 pages), break 0x6019free-frames 56786
+
+Before the sbrk(-1 pages), break 0x6019 free-frames 56786
+Calling sbrk(-4096) ...
+After the sbrk(-1 pages), break 0x5019free-frames 56787
+
+Before the sbrk(-1 pages), break 0x5019 free-frames 56787
+Calling sbrk(-4096) ...
+After the sbrk(-1 pages), break 0x4019free-frames 56788
+
+=========== TEST 5: allocating too much memory ===========
+Before the sbrk(0x7FFFFFFF), break 0x4019 free-frames 56788
+Calling sbrk(0x7FFFFFFF) ...
+Allocating pages failed!
+After the sbrk(0x7FFFFFFF), break 0x4019free-frames 56788
+
+=========== TEST 6: writing in a unallocated page above the progam break ===========
+Before the write, break 0x4019free-frames 56788
+Writing byte 0x5019 ...
+Unhandled Page Fault.
+pid 4 lazyallocation: trap 14 err 6 on cpu 0 eip 0x75a addr 0x5019--kill proc
+---------------------------------------------------------------------------------------------------------------------
